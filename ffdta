@@ -1,0 +1,99 @@
+#!/usr/bin/python3
+
+import sqlite3 
+# не требуется установки отдельного пакета для SQLite3 при версии питона выше 2.5
+#   ДБ/таблица профилей:  id   |  profile
+#    каждому профилю соответствует своя ДБ/таблица данных db_ProfileName, 
+#    чтобы в случае краша просто удалить файл БД, а остальные профили сохранились
+#   ДБ/таблица данных:  id   |  path    |   size    |   last_edited_date-time   |   selected_date-time
+
+import argparse
+
+Version = "0.1.1223"
+Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
+
+parser = argparse.ArgumentParser(
+    prog='ffdta',
+    description=f"""Bременной архив (Date-time file archive) v{Version}',
+                    Используется в сочетании с другими программами для не срочного копирования большого числа файлов
+                    Программа создаёт таблицу соответствий времени последнего изменения файлов,
+                    Отдаёт ссылки на N самых старых файлов, которые ещё не отдавались (либо файлов, изменённых после ДАТА-ВРЕМЯ).""",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog="""  Примеры использования:
+                ffdta -m list
+                ffdta -m create !!!            
+                ffdta -m use !!!
+                ffdta -m create MyProfile  !!!
+                ffdta --mode use MyProfile !!!
+                ffdta -m delete MyProfile
+            wishes and suggestions: fynjy-tox@ya.ru""" #!!! тут передача файла ещё должна быть в случае create
+                                                    #, хорошо бы сделать ещё с передачей из команды после |
+                                                    # в случае use указать с какой даты, количество файлов (дефаулт - всё начиная с последней не отданой)
+)
+
+parser.add_argument ('-m', '--mode', choices=['create', 'delete', 'use', 'list'],                    
+                        help="""Указывает, что надо сделать с архивом. Обязательный параметр.
+                                create -f FILES PROFILENAME: создать новый профиль
+                                delete PROFILENAME: удалить профиль
+                                use PROFILENAME: использовать профиль
+                                list: показать список профилей"""
+)
+
+# вывести на экран доступные сеты и текст с инструкцией
+# ПРОГРАММА [ ДЕЙСТВИЕ СЕТ]
+# действия: использовать, создать, удалить
+#  Проверки от дурака: создать можно только буквы-_, удалить то что есть, нельзя создать что есть
+# к файлам префикс чтобы не создали с системным именем или именем базы-конфига
+
+
+# Кргда вся выборка уже была отдана раньше, выводит сообщение до и после что эта выборка была повторно скопирована, 
+#   поэтому возможно следует остановить сервис источник и скопировать всё до конца начиная с определённой ДАТЫ-ВРЕМЕНИ
+#
+availibleProfiles = [ 'test1', 'test2', 'default' ]   # !!! ут результат выборки из списка Profile, приведённый к строкам
+parser.add_argument ('profile', choices=availibleProfiles, nargs='?', default='default',                     
+                        help="""Имя выбранного профиля.
+                                Каждый профиль является своим набором файлов, пересечения возможны.
+                                не допускаются пробелы и символы кроме A-Z,a-z,0-9,-,_"""
+)
+
+parser.add_argument ('-f', '--files', default='./*',                     
+                        help='' # не забыть проверку что только с креэйт
+)
+
+parser.add_argument ('-d', '--datetime',                      
+                        help='' # не забыть проверку что только с use
+)
+
+parser.add_argument ('-n', '--n',                     
+                        help='' # не забыть проверку что только с use
+)
+
+#-----------------
+
+
+def help(args):
+    print(f'Bременной архив v{Version}')
+    #!!!! тут проверка версии питона и если он ниже 2.5 - наличие sqllite
+
+    print("""Для вывод раздела помощи используйте команду с флагом -h или --help"""
+    )
+
+
+
+
+
+
+#----------------
+parser.set_defaults(func=help)
+args = parser.parse_args()
+
+if not args.mode:           # not vars(args):
+    parser.print_usage()
+else:
+    args.func(args) # !!!
+    
+    print('Режим:', args.mode)
+    print('Профиль:', args.profile)
+    print('Файл:', args.files)
+    print('Дата:', args.datetime)
+    print('Число:', args.n)
