@@ -8,18 +8,15 @@ import sqlite3
 #   ДБ/таблица данных:  id   |  path    |   size    |   last_edited_date-time   |   selected_date-time
 
 import argparse
+import sys
 
-Version = "0.1.1223"
+from f_h import Version
+import f_modes
+
+#!!! from h import Profile - пока даже тут не используется и если дальше так - то и следующую строку удалить
 Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
 
-parser = argparse.ArgumentParser(
-    prog='ffdta',
-    description=f"""Bременной архив (Date-time file archive) v{Version}',
-                    Используется в сочетании с другими программами для не срочного копирования большого числа файлов
-                    Программа создаёт таблицу соответствий времени последнего изменения файлов,
-                    Отдаёт ссылки на N самых старых файлов, которые ещё не отдавались (либо файлов, изменённых после ДАТА-ВРЕМЯ).""",
-    formatter_class=argparse.RawDescriptionHelpFormatter,
-    epilog="""  Примеры использования:
+epilog_txt = """  Примеры использования:
                 ffdta -m list
                 ffdta -m create !!!            
                 ffdta -m use !!!
@@ -29,6 +26,17 @@ parser = argparse.ArgumentParser(
             wishes and suggestions: fynjy-tox@ya.ru""" #!!! тут передача файла ещё должна быть в случае create
                                                     #, хорошо бы сделать ещё с передачей из команды после |
                                                     # в случае use указать с какой даты, количество файлов (дефаулт - всё начиная с последней не отданой)
+if sys.version_info < (2, 5):
+    epilog_txt += f'\n! Вы пользуетесь Python версии {sys.version}, если нет возможности установить версию пакета 2.5, или лучше, то требуется хотя бы установить пакет sqlite3 для работоспособности базовых функций !'
+
+parser = argparse.ArgumentParser(
+    prog='ffdta',
+    description=f"""Bременной архив (Date-time file archive) v{Version}',
+                    Используется в сочетании с другими программами для не срочного копирования большого числа файлов
+                    Программа создаёт таблицу соответствий времени последнего изменения файлов,
+                    Отдаёт ссылки на N самых старых файлов, которые ещё не отдавались (либо файлов, изменённых после ДАТА-ВРЕМЯ).""",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=epilog_txt
 )
 
 parser.add_argument ('-m', '--mode', choices=['create', 'delete', 'use', 'list'],                    
@@ -70,30 +78,52 @@ parser.add_argument ('-n', '--n',
 
 #-----------------
 
-
-def help(args):
-    print(f'Bременной архив v{Version}')
-    #!!!! тут проверка версии питона и если он ниже 2.5 - наличие sqllite
-
-    print("""Для вывод раздела помощи используйте команду с флагом -h или --help"""
-    )
-
-
-
-
-
-
-#----------------
-parser.set_defaults(func=help)
+parser.set_defaults(func=f_modes.help)
 args = parser.parse_args()
 
 if not args.mode:           # not vars(args):
     parser.print_usage()
 else:
-    args.func(args) # !!!
-    
-    print('Режим:', args.mode)
-    print('Профиль:', args.profile)
-    print('Файл:', args.files)
-    print('Дата:', args.datetime)
-    print('Число:', args.n)
+    # centos7 использует максимум python v3.5, поэтому ещё не знакома с кейс-логикой
+    # match args.mode:
+    #     case 'use':
+    #         parser.set_defaults(func=f_modes.use)
+    #     case 'list':
+    #         parser.set_defaults(func=f_modes.list)
+    #     case 'create':
+    #         parser.set_defaults(func=f_modes.use)
+    #     case 'delete':
+    #         parser.set_defaults(func=f_modes.list)
+    #     case _:
+    #         parser.set_defaults(func=f_modes.help)    
+
+    try:
+        modes_dict = {
+            'use': parser.set_defaults(func=f_modes.use),
+            'list': parser.set_defaults(func=f_modes.list),
+            'create': parser.set_defaults(func=f_modes.create),
+            'delete': parser.set_defaults(func=f_modes.delete)
+        }
+
+        args = parser.parse_args()
+
+        f_modes.f_swich(modes_dict, args.mode, parser.set_defaults(func=f_modes.help))
+
+        args.func(args)
+        
+    except AttributeError:
+        parser.print_help()
+        parser.exit()
+
+
+
+
+#----------------
+
+    # print('Режим:', args.mode)
+    # print('Профиль:', args.profile)
+    # print('Файл:', args.files)
+    # print('Дата:', args.datetime)
+    # print('Число:', args.n)
+
+    #re.Match \w-  регэксп для проверки A-Z,a-z,0-9,-,_
