@@ -1,11 +1,18 @@
-#!/usr/bin/python3
+#!/usr/bin/env python
 
-import sqlite3 
+import os
+import re
+
 # не требуется установки отдельного пакета для SQLite3 при версии питона выше 2.5
 #   ДБ/таблица профилей:  id   |  profile
 #    каждому профилю соответствует своя ДБ/таблица данных db_ProfileName, 
 #    чтобы в случае краша просто удалить файл БД, а остальные профили сохранились
 #   ДБ/таблица данных:  id   |  path    |   size    |   last_edited_date-time   |   selected_date-time
+
+# '[1]', "создан каталог баз данных"
+# '[2]', "ошибка создания каталога баз данных"
+# '[3]', "создана база данных", f"{args.profile}.db"
+# '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)
 
 import argparse
 import sys
@@ -41,30 +48,30 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument ('-m', '--mode', choices=['create', 'delete', 'use', 'list'],                    
                         help="""Указывает, что надо сделать с архивом. Обязательный параметр.
-                                create -f FILES PROFILENAME: создать новый профиль
+                                create -f FILES PROFILENAME: создать новый профиль и(или) добавить пути в сущестующий
                                 delete PROFILENAME: удалить профиль
                                 use PROFILENAME: использовать профиль
                                 list: показать список профилей"""
 )
 
-# вывести на экран доступные сеты и текст с инструкцией
-# ПРОГРАММА [ ДЕЙСТВИЕ СЕТ]
-# действия: использовать, создать, удалить
-#  Проверки от дурака: создать можно только буквы-_, удалить то что есть, нельзя создать что есть
-# к файлам префикс чтобы не создали с системным именем или именем базы-конфига
-
-
 # Кргда вся выборка уже была отдана раньше, выводит сообщение до и после что эта выборка была повторно скопирована, 
 #   поэтому возможно следует остановить сервис источник и скопировать всё до конца начиная с определённой ДАТЫ-ВРЕМЕНИ
 #
-availibleProfiles = [ 'test1', 'test2', 'default' ]   # !!! ут результат выборки из списка Profile, приведённый к строкам
-parser.add_argument ('profile', choices=availibleProfiles, nargs='?', default='default',                     
+
+# !!!         Список текущих профилей:      это потом вставить в list
+# availibleProfiles = [ 'default' ] 
+# if os.path.exists('db') & os.path.isdir('db'):
+#     for f in os.listdir('db'):
+#         availibleProfiles.append(re.sub(r'\.db$', '', f))
+# availibleProfiles = set(availibleProfiles)
+
+parser.add_argument ('profile', nargs='?', default='default',                     
                         help="""Имя выбранного профиля.
                                 Каждый профиль является своим набором файлов, пересечения возможны.
                                 не допускаются пробелы и символы кроме A-Z,a-z,0-9,-,_"""
 )
 
-parser.add_argument ('-f', '--files', default='./*',                     
+parser.add_argument ('-f', '--files', default=os.path.join(os.getcwd(), '*'),                     
                         help='' # не забыть проверку что только с креэйт
 )
 
@@ -73,6 +80,10 @@ parser.add_argument ('-d', '--datetime',
 )
 
 parser.add_argument ('-n', '--n',                     
+                        help='' # не забыть проверку что только с use
+)
+
+parser.add_argument ('-c', '--check',                     
                         help='' # не забыть проверку что только с use
 )
 
@@ -97,20 +108,32 @@ else:
     #     case _:
     #         parser.set_defaults(func=f_modes.help)    
 
+    # попроовал использовать структуру и селектор f_modes.f_swich, но там всегда вызывается последний параметр
+
     try:
-        modes_dict = {
-            'use': parser.set_defaults(func=f_modes.use),
-            'list': parser.set_defaults(func=f_modes.list),
-            'create': parser.set_defaults(func=f_modes.create),
-            'delete': parser.set_defaults(func=f_modes.delete)
-        }
+        if args.mode == 'use': 
+            parser.set_defaults(func=f_modes.use)
+        elif args.mode == 'list':
+            parser.set_defaults(func=f_modes.list)
+        elif args.mode == 'create':
+            parser.set_defaults(func=f_modes.create)
+        elif args.mode == 'delete':
+            parser.set_defaults(func=f_modes.delete)
+        else: 
+            parser.set_defaults(func=f_modes.help)      
+        
+        # modes_dict = {
+        #     'use': parser.set_defaults(func=f_modes.use),
+        #     'list': parser.set_defaults(func=f_modes.list),
+        #     'create': parser.set_defaults(func=f_modes.create),
+        #     'delete': parser.set_defaults(func=f_modes.delete)
+        # }
+        #    
+        # func = f_modes.f_swich(modes_dict, args.mode, f_modes.help)
 
         args = parser.parse_args()
-
-        f_modes.f_swich(modes_dict, args.mode, parser.set_defaults(func=f_modes.help))
-
         args.func(args)
-        
+
     except AttributeError:
         parser.print_help()
         parser.exit()
@@ -120,10 +143,4 @@ else:
 
 #----------------
 
-    # print('Режим:', args.mode)
-    # print('Профиль:', args.profile)
-    # print('Файл:', args.files)
-    # print('Дата:', args.datetime)
-    # print('Число:', args.n)
-
-    #re.Match \w-  регэксп для проверки A-Z,a-z,0-9,-,_
+#if __name__ == '__main__':
