@@ -3,14 +3,8 @@
 import os
 import re
 
-# не требуется установки отдельного пакета для SQLite3 при версии питона выше 2.5
-#   ДБ/таблица профилей:  id   |  profile
-#    каждому профилю соответствует своя ДБ/таблица данных db_ProfileName, 
-#    чтобы в случае краша просто удалить файл БД, а остальные профили сохранились
-#   ДБ/таблица данных:  id   |  path    |   size    |   last_edited_date-time   |   selected_date-time
-
 # '[1]', "создан каталог баз данных"
-# '[2]', "ошибка создания каталога баз данных"
+# '[2]', "ошибка создания базы данных либо каталога для неё"
 # '[3]', "создана база данных", f"{args.profile}.db"
 # '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)
 
@@ -24,12 +18,12 @@ import f_modes
 Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
 
 epilog_txt = """  Примеры использования:
-                ffdta -m list
-                ffdta -m create !!!            
-                ffdta -m use !!!
-                ffdta -m create MyProfile  !!!
-                ffdta --mode use MyProfile !!!
-                ffdta -m delete MyProfile
+                ffdta list
+                ffdta create !!!            
+                ffdta use !!!
+                ffdta create MyProfile  !!!
+                ffdta use MyProfile !!!
+                ffdta delete MyProfile
             wishes and suggestions: fynjy-tox@ya.ru""" #!!! тут передача файла ещё должна быть в случае create
                                                     #, хорошо бы сделать ещё с передачей из команды после |
                                                     # в случае use указать с какой даты, количество файлов (дефаулт - всё начиная с последней не отданой)
@@ -46,13 +40,16 @@ parser = argparse.ArgumentParser(
     epilog=epilog_txt
 )
 
-parser.add_argument ('-m', '--mode', choices=['create', 'delete', 'use', 'list'],                    
+parser.add_argument ('mode', nargs='?', 
+                        choices=['create', 'delete', 'use', 'list'],                    
                         help="""Указывает, что надо сделать с архивом. Обязательный параметр.
-                                create -f FILES PROFILENAME: создать новый профиль и(или) добавить пути в сущестующий
-                                delete PROFILENAME: удалить профиль
-                                use PROFILENAME: использовать профиль
-                                list: показать список профилей"""
-)
+                                create PROFILENAME -f FILES: создать новый профиль и(или) добавить пути в сущестующий
+                                delete PROFILENAME: удалить профиль 
+                                delete PROFILENAME -f FILES: исключить субдирикторию из добаленного пути (check обновляет)
+                                use PROFILENAME ----аргументы----: использовать профиль
+                                list: показать список профилей
+                                """
+) # !! в делете в хелп добавить что 
 
 # Кргда вся выборка уже была отдана раньше, выводит сообщение до и после что эта выборка была повторно скопирована, 
 #   поэтому возможно следует остановить сервис источник и скопировать всё до конца начиная с определённой ДАТЫ-ВРЕМЕНИ
@@ -68,12 +65,13 @@ parser.add_argument ('-m', '--mode', choices=['create', 'delete', 'use', 'list']
 parser.add_argument ('profile', nargs='?', default='default',                     
                         help="""Имя выбранного профиля.
                                 Каждый профиль является своим набором файлов, пересечения возможны.
-                                не допускаются пробелы и символы кроме A-Z,a-z,0-9,-,_"""
+                                Не допускаются пробелы и символы кроме A-Z,a-z,0-9,-,_"""
 )
 
 parser.add_argument ('-f', '--files', default=os.path.join(os.getcwd(), '*'),                     
-                        help='' # не забыть проверку что только с креэйт
-)
+                        help="""Добавляет к профилю дополнительный путь к файлам для временного файлового архива.
+                                Добавляется по одной директории. При необходимости внести несколько путей используйте внешний скрипт, вызывающий ffdta для каждого элемента итератора.""" 
+) 
 
 parser.add_argument ('-d', '--datetime',                      
                         help='' # не забыть проверку что только с use
@@ -108,28 +106,27 @@ else:
     #     case _:
     #         parser.set_defaults(func=f_modes.help)    
 
-    # попроовал использовать структуру и селектор f_modes.f_swich, но там всегда вызывается последний параметр
-
-    try:
-        if args.mode == 'use': 
-            parser.set_defaults(func=f_modes.use)
-        elif args.mode == 'list':
-            parser.set_defaults(func=f_modes.list)
-        elif args.mode == 'create':
-            parser.set_defaults(func=f_modes.create)
-        elif args.mode == 'delete':
-            parser.set_defaults(func=f_modes.delete)
-        else: 
-            parser.set_defaults(func=f_modes.help)      
-        
-        # modes_dict = {
-        #     'use': parser.set_defaults(func=f_modes.use),
-        #     'list': parser.set_defaults(func=f_modes.list),
-        #     'create': parser.set_defaults(func=f_modes.create),
-        #     'delete': parser.set_defaults(func=f_modes.delete)
-        # }
-        #    
-        # func = f_modes.f_swich(modes_dict, args.mode, f_modes.help)
+    try:        
+        modes_dict = {
+            'use': f_modes.use,
+            'list': f_modes.list,
+            'create': f_modes.create,
+            'delete': f_modes.delete
+        }
+        # сделал свой свич вместо стопки ифов. тут это излишне, но потренировался, чтобы можно было делать логику типа такой (так как при возврате функция может и выполняться)
+        # def case1():
+        #     print("This is case 1")
+        # def case2():
+        #     print("This is case 2")       
+        # modes_dict_example = {
+        #     'use': case1,
+        #     'delete': case2
+        # }      
+        # print(modes_dict_example['use'])          # <function case1 at 0x0000021DC0A8B560>
+        # print(modes_dict_example.get('use'))      # <function case1 at 0x0000021DC0A8B560>
+        # print(modes_dict_example['use']())        # This is case 1
+        # print(modes_dict_example.get('use')())    # This is case 1
+        parser.set_defaults(func=f_modes.f_switch(modes_dict, args.mode, f_modes.help))
 
         args = parser.parse_args()
         args.func(args)
