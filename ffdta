@@ -6,7 +6,8 @@ import re
 # '[1]', "создан каталог баз данных"
 # '[2]', "ошибка создания базы данных либо каталога для неё"
 # '[3]', "создана база данных", f"{args.profile}.db"
-# '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)
+# '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)"
+## '[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default"
 
 import argparse
 import sys
@@ -18,12 +19,19 @@ import f_modes
 Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
 
 epilog_txt = """  Примеры использования:
-                ffdta list
-                ffdta create !!!            
+                ffdta list                
+                ffdta create MyName -f /home      
+                ffdta create MyName -f ./test 
+                ffdta create MyName -f test                   
                 ffdta use !!!
                 ffdta create MyProfile  !!!
                 ffdta use MyProfile !!!
                 ffdta delete MyProfile
+                
+                (Windows)
+                ffdta create MyName -f C:\\\\Users\\\\user\\\\test   
+                ffdta create MyName -f .\\\\test
+
             wishes and suggestions: fynjy-tox@ya.ru""" #!!! тут передача файла ещё должна быть в случае create
                                                     #, хорошо бы сделать ещё с передачей из команды после |
                                                     # в случае use указать с какой даты, количество файлов (дефаулт - всё начиная с последней не отданой)
@@ -54,13 +62,6 @@ parser.add_argument ('mode', nargs='?',
 # Кргда вся выборка уже была отдана раньше, выводит сообщение до и после что эта выборка была повторно скопирована, 
 #   поэтому возможно следует остановить сервис источник и скопировать всё до конца начиная с определённой ДАТЫ-ВРЕМЕНИ
 #
-
-# !!!         Список текущих профилей:      это потом вставить в list
-# availibleProfiles = [ 'default' ] 
-# if os.path.exists('db') & os.path.isdir('db'):
-#     for f in os.listdir('db'):
-#         availibleProfiles.append(re.sub(r'\.db$', '', f))
-# availibleProfiles = set(availibleProfiles)
 
 parser.add_argument ('profile', nargs='?', default='default',                     
                         help="""Имя выбранного профиля.

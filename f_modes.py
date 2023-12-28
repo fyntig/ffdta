@@ -85,7 +85,7 @@ def isPathAllreadyAdded(profile, files):
     connection = sqlite3.connect(os.path.join('db', f"{profile}.db"))
     cursor = connection.cursor()
 
-    query = f'''SELECT COUNT(*) FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' ''' 
+    query = f'''SELECT COUNT(*) FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' LIMIT 1 ''' 
     #print(cursor.execute(query).fetchall())   # если без COUNT
     result = cursor.execute(query).fetchone()[0]
 
@@ -112,6 +112,12 @@ def create(args):
 
                 if os.listdir('db').__contains__(f"{args.profile}.db"):
                     print(args.files)
+                    print(isPathAllreadyAdded("a1", "C:\\Users\\aognev\\Desktop\\ffdta\\test\\qwe.txt"))
+                    print(isPathAllreadyAdded("a1", "C:\\Users\\aognev\\Desktop\\ffdta\\test"))
+                    print(isPathAllreadyAdded("a1", "/test"))
+                    print(isPathAllreadyAdded("a1", "./test"))
+                    print(isPathAllreadyAdded("a1", ".\\test"))
+                    print(isPathAllreadyAdded("a1", "~\\Desktop\\ffdta\\test"))
 
                     # !!! проверить есть ли этот путь уже, если есть то дропнуть всё с ним связанное и закинуть новыми файлами
                     #           isPathAllreadyAdded(profile, files): - готова
@@ -131,9 +137,6 @@ def create(args):
     else:
          print('[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)")
 
-
-
-
 def delete(args):
     print('Режим:', args.mode) #!!!
     print('test2')
@@ -142,6 +145,23 @@ def use(args):
     print('Режим:', args.mode) #!!!    
     isPathAllreadyAdded(args.profile, args.files)
 
-def list(args):
-    print('Режим:', args.mode) #!!!
-    print('test3')
+def list(args):   
+    if os.path.exists('db') & os.path.isdir('db'):
+        dblist = []
+        for f in os.listdir('db'):
+            if re.search(r'.db$', f):
+                dblist.append(re.findall(r'.db$', f)[0])
+                print(re.sub(r'\.db$', '', f))
+
+    # не требуется выводить вообще ничего наверное в этом случае
+        # if (len(dblist) == 0):
+        #    print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")        
+    # else:
+    #     print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")
+
+    #         Список текущих профилей:
+    # availibleProfiles = [ 'default' ] 
+    # if os.path.exists('db') & os.path.isdir('db'):
+    #     for f in os.listdir('db'):
+    #         availibleProfiles.append(re.sub(r'\.db$', '', f))
+    # availibleProfiles = set(availibleProfiles)
