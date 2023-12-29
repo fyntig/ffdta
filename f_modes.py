@@ -46,6 +46,24 @@ def get_all_files(dir_path):
 
     return file_list
 
+def insertFiles(profile, files):
+    connection = sqlite3.connect(os.path.join('db', f"{profile}.db"))
+
+    cursor = connection.cursor()
+    cursor.executemany('''INSERT INTO fdta VALUES(
+                    NULL, ?, ?, ?, ?, ?) 
+                    ''', get_all_files(files)
+    )   
+    # оставлю для копипасты варианты: 
+    # cursor.execute('''INSERT INTO fdta VALUES(
+    #                     NULL, 'asdas' ,5454 ,'fdfdf' ,'fdfd' ,'fdfd')  
+    #                     ''')  
+    # cursor.execute("INSERT INTO fdta VALUES(NULL, ?, ?, ?, ?, ?)", get_all_files(files)[0])           
+
+    connection.commit()
+    connection.close()
+
+
 #-----------------------
 # id   |  path    |   size    |   (cd) create_date-time   |   (md) modificated_date-time   |   (sd) selected_date-time
 # DATE_TIME in TEXT as ISO8601 strings ("YYYY-MM-DD HH:MM:SS.SSS")
@@ -66,19 +84,24 @@ def newTable(profile, files):
     cursor.execute(newTableQuery)
     connection.commit()
 
+    # тут могло бы быть insertFiles, но повторять конекшен бессмысленно - экономии не будет
     cursor.executemany('''INSERT INTO fdta VALUES(
                     NULL, ?, ?, ?, ?, ?) 
                     ''', get_all_files(files)
-    )   
-    # оставлю для копипасты варианты: 
-    # cursor.execute('''INSERT INTO fdta VALUES(
-    #                     NULL, 'asdas' ,5454 ,'fdfdf' ,'fdfd' ,'fdfd')  
-    #                     ''')  
-    # cursor.execute("INSERT INTO fdta VALUES(NULL, ?, ?, ?, ?, ?)", get_all_files(files)[0])           
+    )             
 
     connection.commit()
     connection.close()
-    print('[3]', "создана база данных", f"{profile}.db")
+    # print('[3]', "создана база данных", f"{profile}.db")
+
+def dropDatabase(profile):
+    ''' Не работает, выдаёт:
+        sqlite3.OperationalError: near "DATABASE": syntax error'''
+    connection = sqlite3.connect(os.path.join('db', f"{profile}.db")) 
+    cursor = connection.cursor()
+    cursor.execute(f"DROP DATABASE {profile}") # хз надо ли добавлять .db
+    connection.commit()
+    connection.close()
 
 def isPathAllreadyAdded(profile, files):
     '''проверяет есть ли этот путь в БД, если есть, то возвращает True, иначе False'''
@@ -104,42 +127,45 @@ def help(args):
 
 def create(args):
     if re.fullmatch(r'(^\w*)([A-Za-z0-9_-])', args.profile): # A-Z,a-z,0-9,-,_
-
-        # os.getcwd() # получить путь текущего рабочего каталога
-
+        # os.getcwd() # получить путь текущего рабочего каталога - просто оставлю здесь для копипасты
         try:
             if os.path.exists('db') & os.path.isdir('db'):
-
                 if os.listdir('db').__contains__(f"{args.profile}.db"):
-                    print(args.files)
-                    print(isPathAllreadyAdded("a1", "C:\\Users\\aognev\\Desktop\\ffdta\\test\\qwe.txt"))
-                    print(isPathAllreadyAdded("a1", "C:\\Users\\aognev\\Desktop\\ffdta\\test"))
-                    print(isPathAllreadyAdded("a1", "/test"))
-                    print(isPathAllreadyAdded("a1", "./test"))
-                    print(isPathAllreadyAdded("a1", ".\\test"))
-                    print(isPathAllreadyAdded("a1", "~\\Desktop\\ffdta\\test"))
+                    if os.path.exists(args.files):
+                        if isPathAllreadyAdded(args.profile, args.files):
+                            # !!! тут вызвать ту же функцию что и в "use --check" (дропнуть всё с ним связанное и закинуть новыми файлами)
 
-                    # !!! проверить есть ли этот путь уже, если есть то дропнуть всё с ним связанное и закинуть новыми файлами
-                    #           isPathAllreadyAdded(profile, files): - готова
-                    # !!! тут добавление списка файлов в существующий список
 
+
+                            print('!!! ')
+                        else:
+                            insertFiles(args.profile, args.files)
+                    else:
+                        print('[7]', "директория недоступна," f"{args.files}")
                 else:                                       
                     newTable(args.profile, args.files)  
-
             else:               
                 os.mkdir('db')
-                print('[1]', "создан каталог баз данных")
+                # print('[1]', "создан каталог баз данных")
 
                 newTable(args.profile, args.files)              
         except:
             print('[2]', "ошибка создания базы данных либо каталога для неё")
-
     else:
          print('[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)")
 
 def delete(args):
-    print('Режим:', args.mode) #!!!
-    print('test2')
+    try:
+        # dropDatabase(args.profile) # sqlite3.OperationalError: near "DATABASE": syntax error
+        if os.path.exists(os.path.join('db', f"{args.profile}.db")):
+            os.remove(os.path.join('db', f"{args.profile}.db"))
+
+    except:
+        # Проблема в том, что могут быть открытые соединения с базой,
+        # поэтому можно хранить все открытые соединения и дропать их.
+        #   Минус этого подхода в том, что не известно какие соединения чем открыты,
+        #   поэтому надо хранить коннекшены при открытии, чего нельзя сделать в двух открытых одновременно программах
+        print('[6]', f"файл базы данных {args.profile}.db используется")
 
 def use(args):
     print('Режим:', args.mode) #!!!    
