@@ -8,8 +8,15 @@ import re
 ## '[3]', "создана база данных", f"{args.profile}.db"
 # '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)"
 ## '[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default"
+#  '[5]', "профиль не найден", args.profile
 # '[6]', f"файл базы данных {args.profile}.db используется"
-# '[7]', "директория недоступна," f"{args.files}"
+# '[7]', "директория недоступна,", f"{args.files}"
+# '[8]', "введённый ответ не распознан, возможны варианты (в любых регистрах): yes, y, no , n" 
+## '[9]', "успешно удалён профиль", f"{args.profile}"
+## '[10]', "успешно удалён путь",  f"{files}" 
+# '[11]', f"в профиле {profile} не найден путь {files}" 
+# '[12]', "попытка получения данных из пустой бд", f"{args.profile}.db"
+# '[13]', "ошибка подключения к бд", f"{args.profile}.db"
 
 import argparse
 import sys
@@ -20,6 +27,15 @@ import f_modes
 #!!! from h import Profile - пока даже тут не используется и если дальше так - то и следующую строку удалить
 Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
 
+modes_dict = {
+            'use': f_modes.use,
+            'list': f_modes.list,
+            'create': f_modes.create,
+            'delete': f_modes.delete,
+            'check': f_modes.check,
+            'remove': f_modes.remove
+        }
+
 epilog_txt = """  Примеры использования:
                 ffdta list                
                 ffdta create MyName -f /home      
@@ -29,6 +45,7 @@ epilog_txt = """  Примеры использования:
                 ffdta create MyProfile  !!!
                 ffdta use MyProfile !!!
                 ffdta delete MyProfile
+                ffdta remove MyProfile -f test 
                 
                 (Windows)
                 ffdta create MyName -f C:\\\\Users\\\\user\\\\test   
@@ -51,12 +68,13 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument ('mode', nargs='?', 
-                        choices=['create', 'delete', 'use', 'list'],                    
+                        choices=modes_dict,                    
                         help="""Указывает, что надо сделать с архивом. Обязательный параметр.
                                 create PROFILENAME -f FILES: создать новый профиль и(или) добавить пути в сущестующий
                                 delete PROFILENAME: удалить профиль 
-                                delete PROFILENAME -f FILES: исключить субдирикторию из добаленного пути (check обновляет)
+                                remove PROFILENAME -f FILES: исключить субдирикторию из добаленного пути (check обновляет)
                                 use PROFILENAME ----аргументы----: использовать профиль
+                            
                                 list: показать список профилей
                                 """
 ) 
@@ -71,7 +89,7 @@ parser.add_argument ('profile', nargs='?', default='default',
                                 Не допускаются пробелы и символы кроме A-Z,a-z,0-9,-,_"""
 )
 
-parser.add_argument ('-f', '--files', default=os.path.join(os.getcwd(), '*'),                     
+parser.add_argument ('-f', '--files', default=os.path.join(os.getcwd(), ''),                     
                         help="""Добавляет к профилю дополнительный путь к файлам для временного файлового архива.
                                 Добавляется по одной директории. При необходимости внести несколько путей используйте внешний скрипт, вызывающий ffdta для каждого элемента итератора.""" 
 ) 
@@ -109,13 +127,7 @@ else:
     #     case _:
     #         parser.set_defaults(func=f_modes.help)    
 
-    try:        
-        modes_dict = {
-            'use': f_modes.use,
-            'list': f_modes.list,
-            'create': f_modes.create,
-            'delete': f_modes.delete
-        }
+    try:                
         # сделал свой свич вместо стопки ифов. тут это излишне, но потренировался, чтобы можно было делать логику типа такой (так как при возврате функция может и выполняться)
         # def case1():
         #     print("This is case 1")

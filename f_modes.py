@@ -63,7 +63,6 @@ def insertFiles(profile, files):
     connection.commit()
     connection.close()
 
-
 #-----------------------
 # id   |  path    |   size    |   (cd) create_date-time   |   (md) modificated_date-time   |   (sd) selected_date-time
 # DATE_TIME in TEXT as ISO8601 strings ("YYYY-MM-DD HH:MM:SS.SSS")
@@ -118,6 +117,41 @@ def isPathAllreadyAdded(profile, files):
         return True
     return False
 
+def removePath(profile, files):
+    """удалить путь из профиля"""
+    if isPathAllreadyAdded(profile, files):
+        connection = sqlite3.connect(os.path.join('db', f"{profile}.db"))
+        cursor = connection.cursor()
+
+        query = f'''DELETE FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' '''
+      
+        cursor.execute(query)
+        # result = cursor.execute(query).fetchall() - получить массив удалённых
+
+        connection.commit()
+        connection.close()
+
+        # print('[10]', "успешно удалён путь",  result")       
+
+            # для выполнения без результатов можно использовать форму с автоматической финализацией,
+            # но так сделаю всё однообразно. Оставлю ниже пример для копипасты:
+            #   with sqlite3.connect(os.path.join('db', f"{profile}.db")) as connection:
+            #       connection.cursor().execute(f'''SELECT COUNT(*) FROM fdta LIMIT 1 ''')
+            
+    else:
+        print('[11]', f"в профиле {profile} не найден путь {files}")       
+
+def pathesCount(profile):
+    connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
+    cursor = connection.cursor()
+    
+    query = f'''SELECT COUNT(*) FROM fdta LIMIT 1 '''
+    result = cursor.execute(query).fetchone()[0]
+
+    connection.close()
+
+    return result
+        
 #-----------------------
 
 def help(args):    
@@ -141,7 +175,7 @@ def create(args):
                         else:
                             insertFiles(args.profile, args.files)
                     else:
-                        print('[7]', "директория недоступна," f"{args.files}")
+                        print('[7]', "директория недоступна,", f"{args.files}")
                 else:                                       
                     newTable(args.profile, args.files)  
             else:               
@@ -155,21 +189,35 @@ def create(args):
          print('[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)")
 
 def delete(args):
-    try:
-        # dropDatabase(args.profile) # sqlite3.OperationalError: near "DATABASE": syntax error
-        if os.path.exists(os.path.join('db', f"{args.profile}.db")):
-            os.remove(os.path.join('db', f"{args.profile}.db"))
+    user_input = input(f'Do you realy want to delelte profile {args.profile}? (yes/no): ')
 
-    except:
-        # Проблема в том, что могут быть открытые соединения с базой,
-        # поэтому можно хранить все открытые соединения и дропать их.
-        #   Минус этого подхода в том, что не известно какие соединения чем открыты,
-        #   поэтому надо хранить коннекшены при открытии, чего нельзя сделать в двух открытых одновременно программах
-        print('[6]', f"файл базы данных {args.profile}.db используется")
+    yes_choices = ['yes', 'y']
+    no_choices = ['no', 'n']
 
+    if user_input.lower() in yes_choices:
+        try:
+            # dropDatabase(args.profile) # sqlite3.OperationalError: near "DATABASE": syntax error
+            if os.path.exists(os.path.join('db', f"{args.profile}.db")):
+                os.remove(os.path.join('db', f"{args.profile}.db"))
+                # print('[9]', "успешно удалён профиль", f"{args.profile}")
+
+        except:
+            # Проблема в том, что могут быть открытые соединения с базой,
+            # поэтому можно хранить все открытые соединения и дропать их.
+            #   Минус этого подхода в том, что не известно какие соединения чем открыты,
+            #   поэтому надо хранить коннекшены при открытии, чего нельзя сделать в двух открытых одновременно программах
+            print('[6]', f"файл базы данных {args.profile}.db используется")
+
+    elif user_input.lower() in no_choices:
+        pass
+
+    else:
+        print('[8]', "введённый ответ не распознан, возможны варианты (в любых регистрах): yes, y, no , n")
+  
 def use(args):
     print('Режим:', args.mode) #!!!    
-    isPathAllreadyAdded(args.profile, args.files)
+    #!!! обязателньо проверить если база полностью пустая вывести соответствующую ошибку и ничего ен делать так как из неё можно просто удалить все пути
+    print(isPathAllreadyAdded(args.profile, args.files))
 
 def list(args):   
     if os.path.exists('db') & os.path.isdir('db'):
@@ -184,10 +232,31 @@ def list(args):
         #    print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")        
     # else:
     #     print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")
-
+                
     #         Список текущих профилей:
     # availibleProfiles = [ 'default' ] 
     # if os.path.exists('db') & os.path.isdir('db'):
     #     for f in os.listdir('db'):
     #         availibleProfiles.append(re.sub(r'\.db$', '', f))
     # availibleProfiles = set(availibleProfiles)
+                
+def check(args):    
+    print('Режим1:', args.mode) #!!! 
+    
+def remove(args):        
+    if os.path.exists('db') & os.path.isdir('db'):
+        if os.listdir('db').__contains__(f"{args.profile}.db"):
+            try:       
+                if pathesCount(args.profile) > 0:
+                    removePath(args.profile, args.files)
+
+                else:
+                    print('[12]', "попытка получения данных из пустой бд", f"{args.profile}.db")
+
+            except:
+                print('[13]', "ошибка подключения к бд", f"{args.profile}.db")
+        else:
+            print('[5]', "профиль не найден", args.profile)
+    # else:
+    #   print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")    
+    
