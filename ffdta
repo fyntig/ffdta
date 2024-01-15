@@ -7,7 +7,7 @@ import re
 # '[2]', "ошибка создания базы данных либо каталога для неё"
 ## '[3]', "создана база данных", f"{args.profile}.db"
 # '[4]', "недопустимые символы в имени профиля (разрешены: A-Z,a-z,0-9,-,_)"
-## '[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default"
+# '[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default"
 #  '[5]', "профиль не найден", args.profile
 # '[6]', f"файл базы данных {args.profile}.db используется"
 # '[7]', "директория недоступна,", f"{args.files}"
@@ -24,36 +24,42 @@ import sys
 from f_h import Version
 import f_modes
 
-#!!! from h import Profile - пока даже тут не используется и если дальше так - то и следующую строку удалить
 Profile = "default"   # каждый профиль является своим набором файлов, пересечения возможны
-
-modes_dict = {
+Modes_dict = {
             'use': f_modes.use,
             'list': f_modes.list,
             'create': f_modes.create,
             'delete': f_modes.delete,
             'check': f_modes.check,
-            'remove': f_modes.remove
+            'remove': f_modes.remove,
+            'refresh': f_modes.refresh,
+            'index': f_modes.index
         }
 
 epilog_txt = """  Примеры использования:
                 ffdta list                
-                ffdta create MyName -f /home      
-                ffdta create MyName -f ./test 
-                ffdta create MyName -f test                   
-                ffdta use !!!
-                ffdta create MyProfile  !!!
-                ffdta use MyProfile !!!
+                ffdta create MyProfile -f /home      
+                ffdta create MyProfile -f ./test 
+                ffdta create MyProfile -f test    
+                ffdta index MyProfile -ci
+                ffdta index MyProfile -di
                 ffdta delete MyProfile
                 ffdta remove MyProfile -f test 
-                
-                (Windows)
-                ffdta create MyName -f C:\\\\Users\\\\user\\\\test   
-                ffdta create MyName -f .\\\\test
+                ffdta check MyProfile -f test
+                ffdta refresh MyProfile -f test
 
-            wishes and suggestions: fynjy-tox@ya.ru""" #!!! тут передача файла ещё должна быть в случае create
-                                                    #, хорошо бы сделать ещё с передачей из команды после |
-                                                    # в случае use указать с какой даты, количество файлов (дефаулт - всё начиная с последней не отданой)
+
+                ffdta index MyProfile -ci yes; ffdta use MyProfile -f test -nu yes -a yes
+                ffdta use MyProfile !!! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        
+                ffdta use MyProfile -d 2023-10-20T00:00:00.000000 -n 1000
+                ffdta use MyProfile -f test | cp /backup/test   !!!! сделать чтобы так работало  
+
+                (Windows)
+                ffdta create MyProfile -f C:\\\\Users\\\\user\\\\test   
+                ffdta create MyProfile -f .\\\\test
+
+            wishes and suggestions: fynjy-tox@ya.ru""" 
+
 if sys.version_info < (2, 5):
     epilog_txt += f'\n! Вы пользуетесь Python версии {sys.version}, если нет возможности установить версию пакета 2.5, или лучше, то требуется хотя бы установить пакет sqlite3 для работоспособности базовых функций !'
 
@@ -68,12 +74,16 @@ parser = argparse.ArgumentParser(
 )
 
 parser.add_argument ('mode', nargs='?', 
-                        choices=modes_dict,                    
+                        choices=Modes_dict,                    
                         help="""Указывает, что надо сделать с архивом. Обязательный параметр.
                                 create PROFILENAME -f FILES: создать новый профиль и(или) добавить пути в сущестующий
                                 delete PROFILENAME: удалить профиль 
                                 remove PROFILENAME -f FILES: исключить субдирикторию из добаленного пути (check обновляет)
-                                use PROFILENAME ----аргументы----: использовать профиль
+                                check PROFILENAME -f FILES: обновить список файлов по пути (сбрасывает даты последнего получения)
+                                refresh PROFILENAME -f FILES: сбросить даты последнего получения
+                                index PROFILENAME -ci: создать индексы для ускорения операции use c опцией -nu 
+                                    (при больших объёмах без разделения на части даёт значительный прирост в скорости, но замедлит всё остальное)
+                                use PROFILENAME ----аргументы----: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                             
                                 list: показать список профилей
                                 """
@@ -94,16 +104,29 @@ parser.add_argument ('-f', '--files', default=os.path.join(os.getcwd(), ''),
                                 Добавляется по одной директории. При необходимости внести несколько путей используйте внешний скрипт, вызывающий ffdta для каждого элемента итератора.""" 
 ) 
 
-parser.add_argument ('-d', '--datetime',                      
-                        help='' # не забыть проверку что только с use
+parser.add_argument ('-d', '--date',                      
+                        help="""Отдаёт не только ещё не отданные файлы, но и с датой изменения после указанной даты"""
 )
 
 parser.add_argument ('-n', '--n',                     
-                        help='' # не забыть проверку что только с use
+                        help="""Ограничивает количество отдаваемых файлов""" 
 )
 
-parser.add_argument ('-c', '--check',                     
-                        help='' # не забыть проверку что только с use
+parser.add_argument ('-nu', '--noupdatedate',                     
+                        help="""Не меняет дату последнего получения (требуется любое не пустое значение параметра)""" 
+)
+
+parser.add_argument ('-ci', '--createindex',                     
+                        help="""При больших объёмах без разделения на части индекс даёт значительный прирост в скорости, но замедлит всё остальное
+                                (требуется любое не пустое значение параметра)""" 
+)
+
+parser.add_argument ('-di', '--deleteindex',                     
+                        help="""Удалить индекс (требуется любое не пустое значение параметра)""" 
+)
+
+parser.add_argument ('-a', '--array',                     
+                        help="""Отдать результат в виде массива (требуется любое не пустое значение параметра)""" 
 )
 
 #-----------------
@@ -141,7 +164,7 @@ else:
         # print(modes_dict_example.get('use'))      # <function case1 at 0x0000021DC0A8B560>
         # print(modes_dict_example['use']())        # This is case 1
         # print(modes_dict_example.get('use')())    # This is case 1
-        parser.set_defaults(func=f_modes.f_switch(modes_dict, args.mode, f_modes.help))
+        parser.set_defaults(func=f_modes.f_switch(Modes_dict, args.mode, f_modes.help))
 
         args = parser.parse_args()
         args.func(args)
