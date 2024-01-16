@@ -20,6 +20,8 @@ def f_switch(dictionary, exp, default=None):
     значение (например 200) и значение по-умолчанию (не обязательное)
     так как питон теоретически потдерживает стиль функционального программирования - может быть полезным сделать отдельной функцией
     '''    
+    # в этом проекте не используется, но оставлю чтобы потом делать копипасту отсюда (из git)
+
     if exp in dictionary:
         return dictionary[exp]
     else:
@@ -32,6 +34,7 @@ def get_all_files(dir_path):
         for file in files:
             file_list.append([
                 os.path.abspath(os.path.join(root, file)), 
+                'FALSE',
                 os.path.getsize(os.path.abspath(os.path.join(root, file))), 
                 datetime.datetime.fromtimestamp(os.path.getctime(os.path.abspath(os.path.join(root, file)))).isoformat(), 
                 datetime.datetime.fromtimestamp(os.path.getmtime(os.path.abspath(os.path.join(root, file)))).isoformat(), 
@@ -43,6 +46,7 @@ def get_all_files(dir_path):
         for dir in dirs:
             file_list.append([
                 os.path.abspath(os.path.join(root, dir)), 
+                'TRUE',
                 os.path.getsize(os.path.abspath(os.path.join(root, dir))), 
                 datetime.datetime.fromtimestamp(os.path.getctime(os.path.abspath(os.path.join(root, dir)))).isoformat(), 
                 datetime.datetime.fromtimestamp(os.path.getmtime(os.path.abspath(os.path.join(root, dir)))).isoformat(), 
@@ -72,12 +76,13 @@ def insertFiles(profile, files):
     connection.close()
 
 #-----------------------
-# id   |  path    |   size    |   (cd) create_date-time   |   (md) modificated_date-time   |   (sd) selected_date-time
+# id   |  path    |     isdir   |   size    |   (cd) create_date-time   |   (md) modificated_date-time   |   (sd) selected_date-time
 # DATE_TIME in TEXT as ISO8601 strings ("YYYY-MM-DD HH:MM:SS.SSS")
 def newTable(profile, files):
     newTableQuery = '''CREATE TABLE IF NOT EXISTS fdta (
                     id INTEGER PRIMARY KEY,
                     path TEXT NOT NULL,
+                    isdir TEXT,
                     size INTEGER,
                     cd TEXT,
                     md TEXT,                    
@@ -93,7 +98,7 @@ def newTable(profile, files):
 
     # тут могло бы быть insertFiles, но повторять конекшен бессмысленно - экономии не будет
     cursor.executemany('''INSERT INTO fdta VALUES(
-                    NULL, ?, ?, ?, ?, ?) 
+                    NULL, ?, ?, ?, ?, ?, ?) 
                     ''', get_all_files(files)
     )             
 
@@ -162,17 +167,13 @@ def pathesCount(profile):
 
 def lastDate(profile, files):
     '''скорее всего не нужная функция так как будет в любом случае назначаться для пустых и свежее указанной даты'''
+    # не используется в проекте, но пока оставлю
 
     result = OldestDate
 
     connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
-    cursor = connection.cursor()
-    
-    # оставлю тут как пример так как потом буду делать апдейт даты
-    # query = f'''UPDATE fdta SET sd = ? WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' AND id IN (SELECT id FROM fdta WHERE size < 10000 LIMIT 1) ''' #
-    # cursor.execute(query, (datetime.datetime.now().isoformat(), ))
-    # connection.commit()
-
+    cursor = connection.cursor()   
+  
     query = f'''SELECT MIN(sd) FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' '''
     minDate = cursor.execute(query).fetchone()[0]
     query = f'''SELECT MAX(sd) FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' '''
@@ -189,7 +190,7 @@ def lastDate(profile, files):
 
     return result  
     
-def getPathes(profile, files, date, n, nu):
+def getPathes(profile, files, date, n, nu, onlydirectories, onlyfiles, notempty):
     '''отдаёт ещё не отданные файлы и с датой изменения после указанной даты
         (теоретически нужен ещё режим который отдаёт только те которые изменились после даты, не добавляя новые)'''
 
@@ -204,20 +205,26 @@ def getPathes(profile, files, date, n, nu):
         if date == OldestDate or date == None:
             # только для тех укого не было
             query = f'''SELECT * FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' AND sd = '{OldestDate}' '''
-            if n != None:
-                query += f"LIMIT '{n}' "
-            result = cursor.execute(query).fetchall()            
-
+          
         else:
             # для всех с олдест датой и свежее date апдейтить
             query = f'''SELECT * FROM fdta WHERE 
                             path LIKE '{os.path.join(os.path.abspath(files), '%')}' 
                                 AND (sd = '{OldestDate}' 
-                                    OR sd > '{date}' ) '''
-            
-            if n != None:
-                query += f"LIMIT '{n}' "
-            result = cursor.execute(query).fetchall()
+                                    OR md > '{date}' ) '''          
+           
+        if onlydirectories != None and onlyfiles == None:
+            query += "AND isdir = 'TRUE' "
+        elif onlyfiles != None and onlydirectories == None:
+            query += "AND isdir = 'FALSE' "
+
+        if notempty != None:
+            query += "AND size > 0 "
+
+        if n != None:
+            query += f"LIMIT '{n}' "   
+
+        result = cursor.execute(query).fetchall()
 
         if nu == None:
             query = f'''UPDATE fdta SET sd = ? WHERE id IN (SELECT id FROM ({query})) '''
@@ -241,7 +248,7 @@ def getPathes(profile, files, date, n, nu):
     connection.close()
     return result
 
-def getPathesArray(profile, files, date, n, nu):
+def getPathesArray(profile, files, date, n, nu, onlydirectories, onlyfiles, notempty):
     '''отдаёт ещё не отданные файлы и с датой изменения после указанной даты в виде массива
         (теоретически нужен ещё режим который отдаёт только те которые изменились после даты, не добавляя новые)'''
 
@@ -256,27 +263,41 @@ def getPathesArray(profile, files, date, n, nu):
         if date == OldestDate or date == None:
             # только для тех укого не было
             query = f'''SELECT path FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' AND sd = '{OldestDate}' '''
-            if n != None:
-                query += f"LIMIT '{n}' "
-            result = cursor.execute(query).fetchall()            
-
+          
         else:
             # для всех с олдест датой и свежее date апдейтить
             query = f'''SELECT path FROM fdta WHERE 
                             path LIKE '{os.path.join(os.path.abspath(files), '%')}' 
                                 AND (sd = '{OldestDate}' 
-                                    OR sd > '{date}' ) '''
+                                    OR md > '{date}' ) '''
             
-            if n != None:
-                query += f"LIMIT '{n}' "
-            result = cursor.execute(query).fetchall()
+        if onlydirectories != None and onlyfiles == None:
+            query += "AND isdir = 'TRUE' "
+        elif onlyfiles != None and onlydirectories == None:
+            query += "AND isdir = 'FALSE' "
+
+        if notempty != None:
+            query += "AND size > 0 "
+
+        if n != None:
+            query += f"LIMIT '{n}' "
+
+        result = cursor.execute(query).fetchall()
 
         if nu == None:            
             subquery = f'''SELECT * FROM fdta WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' '''
             if  date == OldestDate or date == None:  
                 subquery += f"AND sd = '{OldestDate}' "
             else:
-                subquery += f"AND (sd = '{OldestDate}' OR sd > '{date}' ) "
+                subquery += f"AND (sd = '{OldestDate}' OR md > '{date}' ) "
+
+            if onlydirectories != None and onlyfiles == None:
+                subquery += "AND isdir = 'TRUE' "
+            elif onlyfiles != None and onlydirectories == None:
+                subquery += "AND isdir = 'FALSE' "
+
+            if notempty != None:
+                subquery += "AND size > 0 "
 
             if n != None:
                 subquery += f"LIMIT '{n}' "
@@ -292,6 +313,83 @@ def getPathesArray(profile, files, date, n, nu):
 
     connection.close()
     return result
+
+def createIndex(profile):
+    try:
+        connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
+        cursor = connection.cursor()
+
+        query = f'''CREATE INDEX idx_path_sd ON fdta (path, isdir, size, md, sd) '''
+        cursor.execute(query)
+
+        connection.commit()
+        connection.close()
+
+    except:
+        print('[15]', "индекс уже существует, при необходимости сначала удалите его и потом создайте снова")
+
+def deleteIndex(profile):
+    try:
+        connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
+        cursor = connection.cursor()
+        
+        query = f'''DROP INDEX idx_path_sd '''
+        cursor.execute(query)
+
+        connection.commit()
+        connection.close()
+
+    except:
+        print('[16]', "индекс не создан или уже удалён ранее")
+
+def refreshDate(profile, files):
+    connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
+    cursor = connection.cursor()   
+  
+    query = f'''UPDATE fdta SET sd = ? WHERE path LIKE '{os.path.join(os.path.abspath(files), '%')}' ''' 
+    cursor.execute(query, (OldestDate, ))
+    # cursor.execute(query, (datetime.datetime.now().isoformat(), ))
+
+    connection.commit()
+    connection.close()
+
+def testmode10Query(profile):
+    connection =  sqlite3.connect(os.path.join('db', f"{profile}.db"))
+    cursor = connection.cursor()   
+  
+    query = f'''SELECT * FROM fdta LIMIT 10 '''
+    result = cursor.execute(query).fetchall()
+
+    connection.close()
+    return result
+
+#-----------------------
+
+def checksDb(func):
+    def wrapper(f_args):
+        if os.path.exists('db') & os.path.isdir('db'):
+            if os.listdir('db').__contains__(f"{f_args.profile}.db"):
+
+                func(f_args)
+
+            else:
+                print('[5]', "профиль не найден", f_args.profile)
+        else:
+            print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")    
+    return wrapper
+
+def checksPathes(func):
+    def wrapper(f_args):
+        try:       
+            if pathesCount(f_args.profile) > 0:
+                
+                func(f_args)
+
+            else:
+                print('[12]', "попытка получения данных из пустой бд", f"{f_args.profile}.db")
+        except:
+            print('[13]', "ошибка подключения к бд", f"{f_args.profile}.db")                           
+    return wrapper
 
 #-----------------------
 
@@ -353,35 +451,24 @@ def delete(args):
     else:
         print('[8]', "введённый ответ не распознан, возможны варианты (в любых регистрах): yes, y, no , n")
   
-def use(args):
+def lambda_use(l_args):
     # Отдаёт ссылки на N самых старых файлов, которые ещё не отдавались (либо файлов, изменённых после ДАТА-ВРЕМЯ)
     # f - только выбранные файлы, только изменённые после даты d, отдаватть n файлов
 
-    if os.path.exists('db') & os.path.isdir('db'):
-        if os.listdir('db').__contains__(f"{args.profile}.db"):
-            #try:       
-                if pathesCount(args.profile) > 0:
-                    if isPathAllreadyAdded(args.profile, args.files):           
-                            if args.array != None:
-                                print(getPathesArray(args.profile, args.files, args.date, args.n, args.noupdatedate))
-                            else:
-                                for file in getPathes(args.profile, args.files, args.date, args.n, args.noupdatedate):
-                                    print(file[1])
-
-                            #!!! вроде работает, но проблема в том, что если копировать путь ".../test/" скопируются и файлы внутри него, а потом хочет копировать файл ".../test/somefile"
-                            #!!! напрашивается решение сначала скопровать структуру каталогов, а потом копировать файлы
-
-                    else:
-                        print('[11]', f"в профиле {args.profile} не найден путь {args.files}")
-                else:
-                    print('[12]', "попытка получения данных из пустой бд", f"{args.profile}.db")
-
-            #except:
-            #    print('[13]', "ошибка подключения к бд", f"{args.profile}.db")
+    if isPathAllreadyAdded(l_args.profile, l_args.files):           
+        if l_args.array != None:
+            print(getPathesArray(l_args.profile, l_args.files, l_args.date, l_args.n, l_args.noupdatedate, l_args.onlydirectories, l_args.onlyfiles, l_args.notempty))
         else:
-            print('[5]', "профиль не найден", args.profile)
+            for file in getPathes(l_args.profile, l_args.files, l_args.date, l_args.n, l_args.noupdatedate, l_args.onlydirectories, l_args.onlyfiles, l_args.notempty):
+                print(file[1])
+                
+        #!!! ещё надо переделать функцию get_all_files под использование scandir вместо листира так как говорят, что он быстрее работает       
+        
     else:
-      print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")    
+        print('[11]', f"в профиле {l_args.profile} не найден путь {l_args.files}")
+
+def use(args):
+    checksDb(checksPathes(lambda_use(args)))       
 
 def list(args):   
     if os.path.exists('db') & os.path.isdir('db'):
@@ -403,44 +490,52 @@ def list(args):
     #     for f in os.listdir('db'):
     #         availibleProfiles.append(re.sub(r'\.db$', '', f))
     # availibleProfiles = set(availibleProfiles)
-                
+
+def lambda_check(l_args):     
+    try:       
+        if pathesCount(l_args.profile) > 0:
+            removePath(l_args.profile, l_args.files)
+
+        if os.path.exists(l_args.files):                
+            insertFiles(l_args.profile, l_args.files)
+
+    except:
+        print('[13]', "ошибка подключения к бд", f"{l_args.profile}.db")         
+
 def check(args):    
-    if os.path.exists('db') & os.path.isdir('db'):
-        if os.listdir('db').__contains__(f"{args.profile}.db"):
-            try:       
-                if pathesCount(args.profile) > 0:
-                    removePath(args.profile, args.files)
+    checksDb(lambda_check(args)) 
 
-                if os.path.exists(args.files):                
-                    insertFiles(args.profile, args.files)
+def lambda_remove(l_args):  
+    removePath(l_args.profile, l_args.files)
 
-            except:
-                print('[13]', "ошибка подключения к бд", f"{args.profile}.db")            
-
-        else:
-            print('[5]', "профиль не найден", args.profile)
-    else:
-      print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default") 
-    
 def remove(args):        
-    if os.path.exists('db') & os.path.isdir('db'):
-        if os.listdir('db').__contains__(f"{args.profile}.db"):
-            try:       
-                if pathesCount(args.profile) > 0:
-                    removePath(args.profile, args.files)
-
-                else:
-                    print('[12]', "попытка получения данных из пустой бд", f"{args.profile}.db")
-
-            except:
-                print('[13]', "ошибка подключения к бд", f"{args.profile}.db")
-        else:
-            print('[5]', "профиль не найден", args.profile)
-    else:
-      print('[5]', "cозданных прфилей не найдено, но вы можете создать новый профиль или использовать default")    
+    checksDb(checksPathes(lambda_remove(args)))  
     
-def refresh(args):
-    print("!!! СБРОСИТЬ ДАТЫ ПО ПУТИ")    
+def lambda_refresh(l_args):      
+    if isPathAllreadyAdded(l_args.profile, l_args.files):  
+        refreshDate(l_args.profile, l_args.files)
+
+    else:
+        print('[11]', f"в профиле {l_args.profile} не найден путь {l_args.files}")        
+
+def refresh(args):    
+    checksDb(checksPathes(lambda_refresh(args)))
+
+def lambda_index(l_args):   
+    if l_args.createindex != None and l_args.deleteindex == None:
+        createIndex(l_args.profile)
+
+    elif l_args.deleteindex != None and l_args.createindex == None:
+        deleteIndex(l_args.profile)
+
+    else:
+        print('[14]', "нельзя одновременно создавать и удалять индексы (использовать ключи -ci и -di)")  
 
 def index(args):
-    print("!!! -ci и -di создаёт и удаляет индексы.... DROP INDEX IF EXIST dbname.tblname.... CREATE INDEX IF NOT EXISTS dbname.ixname ON tblname (columnname1, columnname2)")    
+    checksDb(checksPathes(lambda_index(args)))
+
+def testmode10(args):
+    '''Режим оставлен для тестирования в продуктовых средах, например с фс, не хранящих дату создания файла.
+        Выводит 10 первых строк талицы в виде кортежа (массива)'''
+    print(testmode10Query(args.profile))
+    # с его помощью узнал что на fs без хранения даты создания файла она записывается датой модификации

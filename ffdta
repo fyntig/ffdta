@@ -17,6 +17,9 @@ import re
 # '[11]', f"в профиле {profile} не найден путь {files}" 
 # '[12]', "попытка получения данных из пустой бд", f"{args.profile}.db"
 # '[13]', "ошибка подключения к бд", f"{args.profile}.db"
+# '[14]', "нельзя одновременно создавать и удалять индексы (использовать ключи -ci и -di)"
+# '[15]', "индекс уже существует, при необходимости сначала удалите его и потом создайте снова"
+# '[16]', "индекс не создан или уже удалён ранее"
 
 import argparse
 import sys
@@ -33,7 +36,8 @@ Modes_dict = {
             'check': f_modes.check,
             'remove': f_modes.remove,
             'refresh': f_modes.refresh,
-            'index': f_modes.index
+            'index': f_modes.index,
+            'testmode10': f_modes.testmode10
         }
 
 epilog_txt = """  Примеры использования:
@@ -47,12 +51,13 @@ epilog_txt = """  Примеры использования:
                 ffdta remove MyProfile -f test 
                 ffdta check MyProfile -f test
                 ffdta refresh MyProfile -f test
-
-
-                ffdta index MyProfile -ci yes; ffdta use MyProfile -f test -nu yes -a yes
-                ffdta use MyProfile !!! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!        
+                ffdta index MyProfile -ci yes; ffdta use MyProfile -f test -nu yes -a yes -ne yes
+                ffdta use MyProfile -f test       
                 ffdta use MyProfile -d 2023-10-20T00:00:00.000000 -n 1000
-                ffdta use MyProfile -f test | cp /backup/test   !!!! сделать чтобы так работало  
+
+                python3 ffdta create MyProfile -f /home/admin/test; python3 ffdta index MyProfile -ci yes
+                for file in $(python3 ffdta use MyProfile -f /home/admin/test -od yes); do mkdir /backup/test$file -p; done
+                for file in $(python3 ffdta use MyProfile -f /home/admin/test -of yes); do cp "$file" /backup/test$file; done
 
                 (Windows)
                 ffdta create MyProfile -f C:\\\\Users\\\\user\\\\test   
@@ -83,8 +88,9 @@ parser.add_argument ('mode', nargs='?',
                                 refresh PROFILENAME -f FILES: сбросить даты последнего получения
                                 index PROFILENAME -ci: создать индексы для ускорения операции use c опцией -nu 
                                     (при больших объёмах без разделения на части даёт значительный прирост в скорости, но замедлит всё остальное)
-                                use PROFILENAME ----аргументы----: !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                            
+                                use PROFILENAME -f FILES: отдаёт ссылки на файлы, которые ещё не отдавались 
+                                    (можно указать ограничения количества или чтобы отдавались повторно изменённые после ДАТА-ВРЕМЯ и многое другое.
+                                    если не указать FILES, то будет копирована вся папка с программой, включаяя временные файлы)                            
                                 list: показать список профилей
                                 """
 ) 
@@ -129,6 +135,18 @@ parser.add_argument ('-a', '--array',
                         help="""Отдать результат в виде массива (требуется любое не пустое значение параметра)""" 
 )
 
+parser.add_argument ('-ne', '--notempty',                     
+                        help="""Отдать только с size > 0""" 
+)
+
+parser.add_argument ('-od', '--onlydirectories',                     
+                        help="""Отдать только директории""" 
+)
+
+parser.add_argument ('-of', '--onlyfiles',                     
+                        help="""Отдать только файлы""" 
+)
+
 #-----------------
 
 parser.set_defaults(func=f_modes.help)
@@ -150,8 +168,7 @@ else:
     #     case _:
     #         parser.set_defaults(func=f_modes.help)    
 
-    try:                
-        # сделал свой свич вместо стопки ифов. тут это излишне, но потренировался, чтобы можно было делать логику типа такой (так как при возврате функция может и выполняться)
+    # сделал свой свич вместо стопки ифов. тут это излишне, но потренировался, чтобы можно было делать логику типа такой (так как при возврате функция может и выполняться)
         # def case1():
         #     print("This is case 1")
         # def case2():
@@ -164,6 +181,8 @@ else:
         # print(modes_dict_example.get('use'))      # <function case1 at 0x0000021DC0A8B560>
         # print(modes_dict_example['use']())        # This is case 1
         # print(modes_dict_example.get('use')())    # This is case 1
+
+    try:                        
         parser.set_defaults(func=f_modes.f_switch(Modes_dict, args.mode, f_modes.help))
 
         args = parser.parse_args()
