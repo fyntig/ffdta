@@ -399,6 +399,8 @@ def help(args):
     )
 
 def create(args):
+    # может правильнее было бы использовать scandir и грузить целиком содежимое папок с атрибутами так как вроде оно работает быстрее, чем как я через listdir
+
     if re.fullmatch(r'(^\w*)([A-Za-z0-9_-])', args.profile): # A-Z,a-z,0-9,-,_
         # os.getcwd() # получить путь текущего рабочего каталога - просто оставлю здесь для копипасты
         try:
@@ -460,9 +462,7 @@ def lambda_use(l_args):
             print(getPathesArray(l_args.profile, l_args.files, l_args.date, l_args.n, l_args.noupdatedate, l_args.onlydirectories, l_args.onlyfiles, l_args.notempty))
         else:
             for file in getPathes(l_args.profile, l_args.files, l_args.date, l_args.n, l_args.noupdatedate, l_args.onlydirectories, l_args.onlyfiles, l_args.notempty):
-                print(file[1])
-                
-        #!!! ещё надо переделать функцию get_all_files под использование scandir вместо листира так как говорят, что он быстрее работает       
+                print(file[1])    
         
     else:
         print('[11]', f"в профиле {l_args.profile} не найден путь {l_args.files}")
